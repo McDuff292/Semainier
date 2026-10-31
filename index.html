@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Semainier</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Semainier">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1F3864">
+<style>
+:root{--navy:#1F3864;--bg:#f2f2f7;--card:#fff;--ink:#111;--mut:#6b7280;--line:#d9dbe1;--in:#FFF2CC;--inink:#0000cc}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f2f2f7;--mut:#9ca3af;--line:#3a3a3c;--in:#3b3317;--inink:#8ab4ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,system-ui,Arial,sans-serif;padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px)}
+main{max-width:640px;margin:0 auto}
+h1{font-size:24px;margin:20px 0 4px}
+.sub{color:var(--mut);font-size:14px;margin-bottom:12px}
+.card{background:var(--card);border-radius:14px;padding:12px;margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.row{display:grid;grid-template-columns:92px 1fr 84px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.row:last-of-type{border-bottom:0}
+.row b{font-size:15px}
+select,input{font:inherit;width:100%;padding:9px 8px;border-radius:9px;border:1px solid var(--line);background:var(--in);color:var(--inink);min-height:44px}
+input[type=number]{text-align:center}
+.tot{display:flex;justify-content:space-between;font-weight:700;padding:10px 4px 2px}
+table{width:100%;border-collapse:collapse;text-align:center}
+th{background:var(--navy);color:#fff;font-size:11px;padding:8px 3px}
+td{padding:10px 3px;border-bottom:1px solid var(--line);font-size:14px}
+td:first-child{text-align:left;font-weight:700}
+tfoot td{font-weight:700;background:var(--line)}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--navy);width:0}
+.wk{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+label{font-size:13px;color:var(--mut);display:block;margin-bottom:4px}
+button{font:inherit;width:100%;min-height:46px;border:0;border-radius:10px;background:var(--navy);color:#fff;font-weight:600;margin-top:4px}
+button.sec{background:transparent;color:var(--mut);border:1px solid var(--line)}
+.note{color:var(--mut);font-size:13px;margin:10px 4px}
+</style>
+</head>
+<body>
+<main>
+<h1>Semainier</h1>
+<div class="sub">EF · Qualité · Sortie longue</div>
+
+<div class="card wk">
+  <div><label for="start">Semaine du</label><input type="date" id="start"></div>
+  <div><label for="wtype">Type de semaine</label>
+    <select id="wtype"><option value="1">1 séance de qualité</option><option value="2">2 séances de qualité</option></select></div>
+</div>
+
+<div class="card">
+  <label for="obj">Objectif km de la semaine</label>
+  <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="ex. 55" id="obj">
+</div>
+
+<div class="card" id="days"></div>
+
+<div class="card">
+  <table>
+    <thead><tr><th style="text-align:left">Type</th><th>Cumul (km)</th><th>% réel</th><th>% théo.</th><th>Reste à faire</th></tr></thead>
+    <tbody id="recap"></tbody>
+    <tfoot><tr><td>Total</td><td id="tk">0.0</td><td id="tp">0%</td><td>100%</td><td id="tr">0.0</td></tr></tfoot>
+  </table>
+  <div class="note" style="margin:8px 0 0">Reste à faire : calé sur le type le plus avancé par rapport à son % théorique (total visé : <b id="tv">0.0</b> km).</div>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th style="text-align:left">Objectif</th><th>Objectif (km)</th><th>Fait</th><th>Reste (km)</th></tr></thead>
+    <tbody id="objrecap"></tbody>
+    <tfoot><tr><td>Total</td><td id="ot">–</td><td id="of">0.0</td><td id="orr">–</td></tr></tfoot>
+  </table>
+</div>
+
+<button class="sec" id="reset">Nouvelle semaine</button>
+<p class="note">Théorique : 1 séance de qualité = 50 / 20 / 30 % ; 2 séances = 38 / 33 / 29 % (EF / Qualité / SL). Qualité = séance entière, échauffement et retour au calme compris. Objectif : ton total saisi × % théorique de chaque type. Les données restent sur cet appareil.</p>
+</main>
+<script>
+const JOURS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+const TYPES=["","Repos","EF","Qualité","Sortie longue"];
+const THEO={1:{"EF":.5,"Qualité":.2,"Sortie longue":.3},2:{"EF":.38,"Qualité":.33,"Sortie longue":.29}};
+const KEY="semainier-v1";
+let S=load();
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.days)return s}catch(e){}return fresh()}
+function monday(){const d=new Date();const k=(d.getDay()+6)%7;d.setDate(d.getDate()-k);return d.toISOString().slice(0,10)}
+function fresh(){return{start:monday(),wtype:"1",obj:"",days:JOURS.map(()=>({t:"",km:""}))}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const $=id=>document.getElementById(id);
+const daysEl=$("days");
+JOURS.forEach((j,i)=>{
+  const r=document.createElement("div");r.className="row";
+  r.innerHTML=`<b>${j}</b><select data-i="${i}">${TYPES.map(t=>`<option value="${t}">${t||"—"}</option>`).join("")}</select><input type="number" inputmode="decimal" step="0.1" min="0" placeholder="km" data-k="${i}">`;
+  daysEl.appendChild(r);
+});
+const tot=document.createElement("div");tot.className="tot";tot.innerHTML='<span>Total semaine</span><span id="wk">0.0 km</span>';daysEl.appendChild(tot);
+const num=v=>parseFloat(String(v).replace(",","."))||0;
+const r1=x=>Math.round(x*10)/10;
+function render(keep){
+  $("start").value=S.start;$("wtype").value=S.wtype;
+  if(!keep)$("obj").value=S.obj||"";
+  daysEl.querySelectorAll("select").forEach(s=>s.value=S.days[s.dataset.i].t);
+  if(!keep)daysEl.querySelectorAll("input").forEach(n=>n.value=S.days[n.dataset.k].km);
+  const th=THEO[S.wtype],K=Object.keys(th);
+  const sum={"EF":0,"Qualité":0,"Sortie longue":0};
+  S.days.forEach(d=>{if(sum[d.t]!==undefined)sum[d.t]+=num(d.km)});
+  const all=K.reduce((a,k)=>a+sum[k],0);
+  const wk=S.days.reduce((a,d)=>a+num(d.km),0);
+  $("wk").textContent=wk.toFixed(1)+" km";
+  const T=Math.max(...K.map(k=>sum[k]/th[k]));
+  const rest={};K.forEach(k=>rest[k]=Math.max(0,r1(T*th[k]-sum[k])));
+  $("recap").innerHTML=K.map(k=>{const p=all?sum[k]/all:0;return`<tr><td>${k}<div class="bar"><i style="width:${Math.round(p*100)}%"></i></div></td><td>${sum[k].toFixed(1)}</td><td>${Math.round(p*100)}%</td><td>${Math.round(th[k]*100)}%</td><td><b>${rest[k].toFixed(1)}</b></td></tr>`}).join("");
+  $("tk").textContent=all.toFixed(1);$("tp").textContent=all?"100%":"0%";
+  $("tv").textContent=T.toFixed(1);$("tr").textContent=K.reduce((a,k)=>a+rest[k],0).toFixed(1);
+  const has=String(S.obj||"")!=="";const O=num(S.obj);
+  $("objrecap").innerHTML=K.map(k=>{const o=O*th[k];return`<tr><td>${k}</td><td>${has?r1(o).toFixed(1):"–"}</td><td>${sum[k].toFixed(1)}</td><td><b>${has?Math.max(0,r1(o-sum[k])).toFixed(1):"–"}</b></td></tr>`}).join("");
+  $("ot").textContent=has?r1(K.reduce((a,k)=>a+O*th[k],0)).toFixed(1):"–";
+  $("of").textContent=all.toFixed(1);
+  $("orr").textContent=has?K.reduce((a,k)=>a+Math.max(0,r1(O*th[k]-sum[k])),0).toFixed(1):"–";
+}
+daysEl.addEventListener("change",e=>{const t=e.target;if(t.dataset.i!==undefined)S.days[t.dataset.i].t=t.value;save();render()});
+daysEl.addEventListener("input",e=>{const t=e.target;if(t.dataset.k!==undefined){S.days[t.dataset.k].km=t.value;save();render(true)}});
+$("obj").oninput=e=>{S.obj=e.target.value;save();render(true)};
+$("wtype").onchange=e=>{S.wtype=e.target.value;save();render()};
+$("start").onchange=e=>{S.start=e.target.value;save()};
+$("reset").onclick=()=>{if(confirm("Effacer la semaine et repartir à zéro ?")){S=fresh();save();render()}};
+render();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
