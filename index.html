@@ -47,16 +47,17 @@ button.sec{background:transparent;color:var(--mut);border:1px solid var(--line)}
 td.over{color:#c0392b;font-weight:700}
 .note{color:var(--mut);font-size:13px;margin:10px 4px}
 h2{font-size:20px;margin:28px 0 4px}
-.chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px}
-.chips button{margin:0;min-height:40px;padding:0 2px;background:var(--line);color:var(--ink);font-weight:500;font-size:clamp(12px,3.6vw,14px);border-radius:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chips button.on{background:var(--navy);color:#fff;font-weight:700}
-.calc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}
-.calc3 label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.calc3>div{min-width:0}
-.calc3 input{text-align:center}
-.calc3 input.out{background:var(--card);color:var(--acc);font-weight:700;border:2px solid var(--acc)}
-.calc3 label .tag{color:var(--acc);font-weight:700}
-.res{text-align:center;padding:14px 4px 4px}
+.dist{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px;margin-bottom:10px}
+.calc2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end}
+.calc2>div,.dist>div{min-width:0}
+.calc2 input,.dist input{text-align:center}
+.calc2 label{display:flex;justify-content:space-between;gap:4px;white-space:nowrap}
+.tag{font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px}
+.tag.in{background:var(--in);color:var(--inink)}
+.tag.out{background:var(--acc);color:var(--card)}
+input.empty,select.empty{background:var(--card);color:var(--ink)}
+input.out{background:var(--acc);color:var(--card);font-weight:800;border-color:var(--acc)}
+.res{text-align:center;padding:14px 4px 4px;min-height:60px}
 .res .big{font-size:clamp(34px,10vw,46px);font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums;line-height:1.1}
 .res .lab{color:var(--mut);font-size:13px}
 .res .det{font-size:14px;margin-top:4px}
@@ -99,20 +100,22 @@ h2{font-size:20px;margin:28px 0 4px}
 <p class="note">Théorique : 1 séance de qualité = 50 / 20 / 30 % ; 2 séances = 38 / 33 / 29 % (EF / Qualité / SL). Qualité = séance entière, échauffement et retour au calme compris. Les données restent sur cet appareil.</p>
 
 <h2>Calculateur d'allure</h2>
-<div class="sub">Distance + allure → temps · Distance + temps → allure</div>
+<div class="sub">Choisis la distance, puis tape l'allure ou le temps : l'autre se calcule.</div>
 <div class="card">
-  <div class="chips" id="pre">
-    <button type="button" data-d="5">5 km</button><button type="button" data-d="10">10 km</button><button type="button" data-d="21.0975">Semi</button><button type="button" data-d="42.195">Marathon</button>
+  <label for="cdsel">Distance</label>
+  <div class="dist">
+    <div><select id="cdsel"><option value="">Choisir…</option><option value="5">5 km</option><option value="10">10 km</option><option value="21.0975">Semi-marathon</option><option value="42.195">Marathon</option><option value="libre">Saisie libre</option></select></div>
+    <div><input type="text" inputmode="decimal" id="cd" placeholder="km" autocomplete="off" aria-label="Distance en km"></div>
   </div>
-  <div class="calc3">
-    <div><label for="cd">Distance <span class="tag" data-for="d"></span></label><input type="text" inputmode="decimal" id="cd" data-f="d" placeholder="km" autocomplete="off"></div>
-    <div><label for="cp">Allure /km <span class="tag" data-for="p"></span></label><input type="text" inputmode="decimal" id="cp" data-f="p" placeholder="4:10" autocomplete="off"></div>
-    <div><label for="ct">Temps <span class="tag" data-for="t"></span></label><input type="text" inputmode="decimal" id="ct" data-f="t" placeholder="41:40" autocomplete="off"></div>
+  <div class="calc2">
+    <div><label for="cp"><span>Allure /km</span><span class="tag" id="tagp"></span></label><input type="text" inputmode="decimal" id="cp" placeholder="min:s" autocomplete="off"></div>
+    <div><label for="ct"><span>Temps</span><span class="tag" id="tagt"></span></label><input type="text" inputmode="decimal" id="ct" placeholder="h:min:s" autocomplete="off"></div>
   </div>
   <div class="res" id="res"></div>
   <div class="splits" id="splits"></div>
 </div>
-<p class="note">Allure : 4:10, 4.10 ou 4-10. Temps : 35 (minutes), 35:00, 1:45:30 ou 1h45. Tape une allure : le temps se calcule. Tape un temps : l'allure se calcule. La case encadrée est le résultat.</p>
+<button class="sec" id="creset">Remise à zéro</button>
+<p class="note">Jaune = ce que tu as tapé, bleu = calculé. Allure : 4:10, 4.10 ou 4-10. Temps : 35 (minutes), 35:00, 1:45:30 ou 1h45.</p>
 </main>
 <script>
 const JOURS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
@@ -176,12 +179,9 @@ render();
 
 /* ---- Calculateur d'allure ---- */
 {
-const CK="semainier-calc-v1",F=["d","p","t"];
-const IN={d:$("cd"),p:$("cp"),t:$("ct")};
-const NAME={d:"Distance",p:"Allure",t:"Temps"};
-let C={d:"10",p:"",t:"",last:"p"};
-try{const s=JSON.parse(localStorage.getItem(CK));if(s&&(s.last==="p"||s.last==="t"))C=Object.assign(C,s)}catch(e){}
-const csave=()=>{try{localStorage.setItem(CK,JSON.stringify(C))}catch(e){}};
+const IN={d:$("cd"),p:$("cp"),t:$("ct")},SEL=$("cdsel");
+const NAME={p:"Allure",t:"Temps"};
+let last=null; // "p" ou "t" : la case tapée ; l'autre est calculée
 const digits=s=>s.replace(/\D/g,"");
 function pDist(v){v=String(v).trim();if(!v)return null;const x=num(v);return x>0?x:NaN}
 // allure -> secondes par km
@@ -203,35 +203,50 @@ function pTime(v){v=String(v).trim().toLowerCase();if(!v)return null;
   const t=h*3600+m*60+s;return t>0?t:NaN}
 function fClock(sec){sec=Math.round(sec);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
   const ss=String(s).padStart(2,"0");return h?`${h}:${String(m).padStart(2,"0")}:${ss}`:`${m}:${ss}`}
-const P={d:pDist,p:pPace,t:pTime};
-// la distance est toujours saisie ; on calcule le temps ou l'allure, selon la dernière des deux tapée
-function target(){return C.last==="p"?"t":"p"}
-const DN=d=>{const n=[[5,"5 km"],[10,"10 km"],[21.0975,"Semi"],[42.195,"Marathon"]].find(([x])=>Math.abs(x-d)<1e-6);return n?n[1]:(Math.round(d*100)/100).toString().replace(".",",")+" km"};
-function crender(keep){
-  const tg=target();
-  F.forEach(k=>{IN[k].classList.toggle("out",k===tg);document.querySelector(`.tag[data-for="${k}"]`).textContent=k===tg?"· calculé":""});
-  if(!keep)F.forEach(k=>{if(k!==tg)IN[k].value=C[k]});
-  const src=F.filter(k=>k!==tg),val={};
-  src.forEach(k=>val[k]=P[k](C[k]));
-  const bad=src.filter(k=>Number.isNaN(val[k]));
+const PRE=[["5","5 km"],["10","10 km"],["21.0975","Semi"],["42.195","Marathon"]];
+const DN=d=>{const n=PRE.find(([x])=>Math.abs(+x-d)<1e-6);return n?n[1]:(Math.round(d*100)/100).toString().replace(".",",")+" km"};
+function mark(){
+  const tg=last?(last==="p"?"t":"p"):null;
+  ["p","t"].forEach(k=>{const tag=$("tag"+k),i=IN[k],filled=i.value.trim()!=="";
+    i.classList.toggle("out",k===tg&&filled);
+    i.classList.toggle("empty",!filled);
+    tag.className="tag"+(k===last?" in":k===tg&&filled?" out":"");
+    tag.textContent=k===last?"saisi":k===tg&&filled?"calculé":""});
+  IN.d.classList.toggle("empty",IN.d.value.trim()==="");SEL.classList.toggle("empty",SEL.value==="");
+}
+function calc(){
   const res=$("res"),sp=$("splits");
-  document.querySelectorAll("#pre button").forEach(b=>b.classList.toggle("on",Math.abs(num(b.dataset.d)-num(C.d))<1e-6&&String(C.d).trim()!==""));
-  if(bad.length){IN[tg].value=C[tg]="";res.innerHTML=`<div class="err">${bad.map(k=>NAME[k]).join(" et ")} : format non reconnu.</div>`;sp.innerHTML="";return}
-  if(src.some(k=>val[k]===null)){IN[tg].value=C[tg]="";res.innerHTML=`<div class="lab">Remplis ${src.filter(k=>val[k]===null).map(k=>NAME[k].toLowerCase()).join(" et ")}.</div>`;sp.innerHTML="";return}
-  let d=val.d,p=val.p,t=val.t;
-  if(tg==="t")t=d*p;else p=t/d;
-  IN[tg].value=C[tg]=tg==="p"?fClock(p):fClock(t);csave();
+  const show=(h,s="")=>{res.innerHTML=h;sp.innerHTML=s};
+  const tg=last?(last==="p"?"t":"p"):null;
+  const d=pDist(IN.d.value);
+  if(tg)IN[tg].value="";
+  if(!last){show(d?`<div class="lab">Tape une allure ou un temps.</div>`:`<div class="lab">Choisis une distance.</div>`);mark();return}
+  const v=last==="p"?pPace(IN.p.value):pTime(IN.t.value);
+  if(Number.isNaN(d)){show(`<div class="err">Distance : format non reconnu.</div>`);mark();return}
+  if(Number.isNaN(v)){show(`<div class="err">${NAME[last]} : format non reconnu.</div>`);mark();return}
+  if(d===null){show(`<div class="lab">Choisis une distance.</div>`);mark();return}
+  if(v===null){show(`<div class="lab">Tape une allure ou un temps.</div>`);mark();return}
+  const p=last==="p"?v:v/d,t=last==="t"?v:v*d;
+  IN[tg].value=tg==="p"?fClock(p):fClock(t);
   const kmh=(3600/p).toFixed(1).replace(".",",");
   const big=tg==="p"?fClock(p)+" /km":fClock(t);
-  res.innerHTML=`<div class="lab">${NAME[tg]}</div><div class="big">${big}</div><div class="det">${DN(d)} · ${fClock(t)} · ${fClock(p)} /km · ${kmh} km/h</div>`;
   const SP=[[1,"1 km"],[5,"5 km"],[10,"10 km"],[21.0975,"Semi"],[42.195,"Marathon"]];
-  sp.innerHTML=SP.map(([x,l])=>`<div${Math.abs(x-d)<1e-3?' class="cur"':""}><span>${l}</span><b>${fClock(x*p)}</b></div>`).join("");
+  show(`<div class="lab">${NAME[tg]} calculé${tg==="p"?"e":""}</div><div class="big">${big}</div><div class="det">${DN(d)} · ${fClock(t)} · ${fClock(p)} /km · ${kmh} km/h</div>`,
+    SP.map(([x,l])=>`<div${Math.abs(x-d)<1e-3?' class="cur"':""}><span>${l}</span><b>${fClock(x*p)}</b></div>`).join(""));
+  mark();
 }
-// la case qu'on édite devient une des deux sources (jamais la case calculée)
-function touch(k,v){C[k]=v;if(k!=="d"&&(String(v).trim()!==""||k===target()))C.last=k}
-F.forEach(k=>IN[k].addEventListener("input",e=>{touch(k,e.target.value);csave();crender(true)}));
-$("pre").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;touch("d",b.dataset.d);IN.d.value=b.dataset.d.replace(".",",");csave();crender(true)});
-crender();
+SEL.addEventListener("change",()=>{const v=SEL.value;
+  if(v==="libre"){IN.d.value="";IN.d.focus()}else{IN.d.value=v.replace(".",",")}
+  calc()});
+IN.d.addEventListener("input",()=>{const x=num(IN.d.value),m=PRE.find(([v])=>Math.abs(+v-x)<1e-6&&IN.d.value.trim()!=="");
+  SEL.value=m?m[0]:(IN.d.value.trim()===""?"":"libre");calc()});
+["p","t"].forEach(k=>{
+  IN[k].addEventListener("input",()=>{if(IN[k].value.trim()!=="")last=k;else if(last===k){last=null;IN[k==="p"?"t":"p"].value=""}calc()});
+  // taper dans la case calculée la remplace d'un coup
+  IN[k].addEventListener("focus",()=>{if(IN[k].classList.contains("out"))IN[k].select()});
+});
+$("creset").onclick=()=>{last=null;SEL.value="";["d","p","t"].forEach(k=>IN[k].value="");calc()};
+calc();
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
